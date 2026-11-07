@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="id" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Dashboard Keuangan</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+    <style>
+        :root {
+            --bg: #f5f6f8;
+            --card: #ffffff;
+            --text: #1f2937;
+            --muted: #6b7280;
+            --border: #e5e7eb;
+            --masuk: #16a34a;
+            --keluar: #dc2626;
+            --aksen: #2563eb;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+        }
+        header {
+            padding: 20px 24px;
+            background: var(--card);
+            border-bottom: 1px solid var(--border);
+        }
+        header h1 { margin: 0; font-size: 1.25rem; }
+        main { max-width: 1100px; margin: 0 auto; padding: 24px 16px 48px; }
+        .grid { display: grid; gap: 16px; }
+        .stats { grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); margin-bottom: 16px; }
+        .charts { grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); margin-bottom: 16px; }
+        .card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 16px 18px;
+        }
+        .card h2 { margin: 0 0 12px; font-size: 1rem; }
+        .label { color: var(--muted); font-size: .8rem; }
+        .value { font-size: 1.4rem; font-weight: 600; margin-top: 4px; }
+        .masuk { color: var(--masuk); }
+        .keluar { color: var(--keluar); }
+        .chart-box { position: relative; height: 280px; }
+        .row-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 12px; }
+        .row-head h2 { margin: 0; }
+        form.tambah { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); align-items: end; }
+        form.tambah label { display: flex; flex-direction: column; gap: 4px; font-size: .8rem; color: var(--muted); }
+        input, select, button {
+            font: inherit;
+            padding: 8px 10px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: #fff;
+            color: var(--text);
+        }
+        button.utama { background: var(--aksen); border-color: var(--aksen); color: #fff; cursor: pointer; }
+        button.hapus { padding: 4px 8px; font-size: .8rem; color: var(--keluar); cursor: pointer; }
+        table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+        th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--border); }
+        th { color: var(--muted); font-weight: 500; font-size: .8rem; }
+        td.angka, th.angka { text-align: right; }
+        .kosong { color: var(--muted); padding: 24px 0; text-align: center; }
+        #pesan { color: var(--keluar); font-size: .85rem; min-height: 1.2em; margin-top: 8px; }
+    </style>
+</head>
+<body>
+<header>
+    <h1>Dashboard Keuangan Pribadi</h1>
+</header>
+
+<main>
+    <section class="grid stats">
+        <div class="card">
+            <div class="label">Pemasukan bulan ini</div>
+            <div class="value masuk" id="statMasuk">-</div>
+        </div>
+        <div class="card">
+            <div class="label">Pengeluaran bulan ini</div>
+            <div class="value keluar" id="statKeluar">-</div>
+        </div>
+        <div class="card">
+            <div class="label">Selisih bulan ini</div>
+            <div class="value" id="statSelisih">-</div>
+        </div>
+        <div class="card">
+            <div class="label">Total saldo</div>
+            <div class="value" id="statSaldo">-</div>
+        </div>
+    </section>
+
+    <section class="grid charts">
+        <div class="card">
+            <div class="row-head">
+                <h2>Pengeluaran per kategori</h2>
+                <input type="month" id="pilihBulan" aria-label="Pilih bulan">
+            </div>
+            <div class="chart-box">
+                <canvas id="grafikKategori"></canvas>
+            </div>
+            <div class="kosong" id="kosongKategori" hidden>Belum ada pengeluaran di bulan ini.</div>
+        </div>
+        <div class="card">
+            <h2>Pemasukan vs pengeluaran (6 bulan)</h2>
+            <div class="chart-box">
+                <canvas id="grafikBulanan"></canvas>
+            </div>
+        </div>
+    </section>
+
+    <section class="card" style="margin-bottom:16px">
+        <h2>Tambah transaksi</h2>
+        <form class="tambah" id="formTambah">
+            <label>Tanggal
+                <input type="date" name="tanggal" required>
+            </label>
+            <label>Jenis
+                <select name="jenis">
+                    <option value="PENGELUARAN">Pengeluaran</option>
+                    <option value="PEMASUKAN">Pemasukan</option>
+                </select>
+            </label>
+            <label>Kategori
+                <input type="text" name="kategori" list="daftarKategori" required placeholder="mis. Makan">
+            </label>
+            <label>Deskripsi
+                <input type="text" name="deskripsi" placeholder="opsional">
+            </label>
+            <label>Jumlah (Rp)
+                <input type="number" name="jumlah" min="1" step="1" required>
+            </label>
+            <button type="submit" class="utama">Simpan</button>
+        </form>
+        <datalist id="daftarKategori">
+            <option value="Gaji"></option>
+            <option value="Freelance"></option>
+            <option value="Makan"></option>
+            <option value="Transportasi"></option>
+            <option value="Sewa/Kos"></option>
+            <option value="Tagihan"></option>
+            <option value="Hiburan"></option>
+            <option value="Kesehatan"></option>
+            <option value="Belanja"></option>
+        </datalist>
+        <div id="pesan" role="alert"></div>
+    </section>
+
+    <section class="card">
+        <h2>10 transaksi terakhir</h2>
+        <table>
+            <thead>
+            <tr>
+                <th>Tanggal</th>
+                <th>Kategori</th>
+                <th>Deskripsi</th>
+                <th class="angka">Jumlah</th>
+                <th></th>
+            </tr>
+            </thead>
+            <tbody id="badanTabel"></tbody>
+        </table>
+        <div class="kosong" id="kosongTabel" hidden>Belum ada transaksi.</div>
+    </section>
+</main>
+
+<script th:inline="none">
+    const rupiah = (n) => new Intl.NumberFormat('id-ID', {
+        style: 'currency', currency: 'IDR', maximumFractionDigits: 0
+    }).format(n);
+
+    const WARNA = ['#2563eb', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#84cc16'];
+
+    let grafikKategori = null;
+    let grafikBulanan = null;
+
+    const hariIni = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    const bulanIni = hariIni.getFullYear() + '-' + pad(hariIni.getMonth() + 1);
+    const tanggalIni = bulanIni + '-' + pad(hariIni.getDate());
+
+    document.getElementById('pilihBulan').value = bulanIni;
+    document.querySelector('#formTambah input[name="tanggal"]').value = tanggalIni;
+
+    async function ambilJson(url) {
+        const res = await fetch(url);
+        if (!res.ok) {
+            throw new Error('Gagal memuat ' + url + ' (' + res.status + ')');
+        }
+        return res.json();
+    }
+
+    async function muatRingkasan() {
+        const bulan = document.getElementById('pilihBulan').value || bulanIni;
+        const data = await ambilJson('/api/stats/ringkasan?bulan=' + bulan);
+
+        document.getElementById('statMasuk').textContent = rupiah(data.pemasukan);
+        document.getElementById('statKeluar').textContent = rupiah(data.pengeluaran);
+
+        const selisih = document.getElementById('statSelisih');
+        selisih.textContent = rupiah(data.saldoBulanIni);
+        selisih.className = 'value ' + (data.saldoBulanIni >= 0 ? 'masuk' : 'keluar');
+
+        document.getElementById('statSaldo').textContent = rupiah(data.totalSaldo);
+    }
+
+    async function muatKategori() {
+        const bulan = document.getElementById('pilihBulan').value || bulanIni;
+        const data = await ambilJson('/api/stats/kategori?bulan=' + bulan);
+
+        const kosong = data.length === 0;
+        document.getElementById('kosongKategori').hidden = !kosong;
+        document.getElementById('grafikKategori').parentElement.hidden = kosong;
+
+        if (grafikKategori) {
+            grafikKategori.destroy();
+            grafikKategori = null;
+        }
+        if (kosong) {
+            return;
+        }
+
+        grafikKategori = new Chart(document.getElementById('grafikKategori'), {
+            type: 'doughnut',
+            data: {
+                labels: data.map((d) => d.kategori),
+                datasets: [{
+                    data: data.map((d) => d.total),
+                    backgroundColor: data.map((_, i) => WARNA[i % WARNA.length]),
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {position: 'bottom'},
+                    tooltip: {callbacks: {label: (ctx) => ' ' + ctx.label + ': ' + rupiah(ctx.parsed)}}
+                }
+            }
+        });
+    }
+
+    async function muatBulanan() {
+        const data = await ambilJson('/api/stats/bulanan?jumlah=6');
+
+        if (grafikBulanan) {
+            grafikBulanan.destroy();
+        }
+
+        grafikBulanan = new Chart(document.getElementById('grafikBulanan'), {
+            type: 'bar',
+            data: {
+                labels: data.labels,
+                datasets: [
+                    {label: 'Pemasukan', data: data.pemasukan, backgroundColor: '#16a34a'},
+                    {label: 'Pengeluaran', data: data.pengeluaran, backgroundColor: '#dc2626'}
+                ]
+            },
+            options: {
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {callback: (v) => new Intl.NumberFormat('id-ID', {notation: 'compact'}).format(v)}
+                    }
+                },
+                plugins: {
+                    legend: {position: 'bottom'},
+                    tooltip: {callbacks: {label: (ctx) => ' ' + ctx.dataset.label + ': ' + rupiah(ctx.parsed.y)}}
+                }
+            }
+        });
+    }
+
+    async function muatTabel() {
+        const data = await ambilJson('/api/transaksi/terbaru');
+        const badan = document.getElementById('badanTabel');
+        badan.replaceChildren();
+
+        document.getElementById('kosongTabel').hidden = data.length > 0;
+
+        for (const t of data) {
+            const tr = document.createElement('tr');
+
+            const sel = (teks, kelas) => {
+                const td = document.createElement('td');
+                td.textContent = teks;
+                if (kelas) td.className = kelas;
+                return td;
+            };
+
+            const masuk = t.jenis === 'PEMASUKAN';
+            tr.append(
+                sel(t.tanggal),
+                sel(t.kategori),
+                sel(t.deskripsi || '-'),
+                sel((masuk ? '+ ' : '- ') + rupiah(t.jumlah), 'angka ' + (masuk ? 'masuk' : 'keluar'))
+            );
+
+            const tdAksi = document.createElement('td');
+            const tombol = document.createElement('button');
+            tombol.type = 'button';
+            tombol.className = 'hapus';
+            tombol.textContent = 'Hapus';
+            tombol.addEventListener('click', () => hapusTransaksi(t.id));
+            tdAksi.append(tombol);
+            tr.append(tdAksi);
+
+            badan.append(tr);
+        }
+    }
+
+    async function hapusTransaksi(id) {
+        if (!confirm('Hapus transaksi ini?')) {
+            return;
+        }
+        const res = await fetch('/api/transaksi/' + id, {method: 'DELETE'});
+        if (res.ok) {
+            muatSemua();
+        } else {
+            tampilkanPesan('Gagal menghapus transaksi.');
+        }
+    }
+
+    function tampilkanPesan(teks) {
+        document.getElementById('pesan').textContent = teks;
+    }
+
+    document.getElementById('formTambah').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        tampilkanPesan('');
+
+        const form = e.target;
+        const payload = {
+            tanggal: form.tanggal.value,
+            jenis: form.jenis.value,
+            kategori: form.kategori.value.trim(),
+            deskripsi: form.deskripsi.value.trim(),
+            jumlah: Number(form.jumlah.value)
+        };
+
+        const res = await fetch('/api/transaksi', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
+        });
+
+        if (!res.ok) {
+            tampilkanPesan('Data tidak valid, periksa kembali isian Anda.');
+            return;
+        }
+
+        form.kategori.value = '';
+        form.deskripsi.value = '';
+        form.jumlah.value = '';
+        muatSemua();
+    });
+
+    document.getElementById('pilihBulan').addEventListener('change', () => {
+        muatRingkasan();
+        muatKategori();
+    });
+
+    async function muatSemua() {
+        try {
+            await Promise.all([muatRingkasan(), muatKategori(), muatBulanan(), muatTabel()]);
+        } catch (err) {
+            tampilkanPesan(err.message);
+        }
+    }
+
+    muatSemua();
+</script>
+</body>
+</html>
