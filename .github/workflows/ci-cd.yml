@@ -19,6 +19,21 @@ jobs:
       contents: read
       packages: read
 
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: keuangan
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -35,6 +50,10 @@ jobs:
 
       - name: Build and test with Maven
         run: ./mvnw clean verify
+        env:
+          SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/keuangan
+          SPRING_DATASOURCE_USERNAME: postgres
+          SPRING_DATASOURCE_PASSWORD: postgres
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
